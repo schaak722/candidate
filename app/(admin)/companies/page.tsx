@@ -20,7 +20,9 @@ function StatusPill({ active }: { active: boolean }) {
     <span
       className={[
         "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        active ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200" : "bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200",
+        active
+          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+          : "bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200",
       ].join(" ")}
     >
       {active ? "Active" : "Inactive"}
@@ -112,11 +114,11 @@ export default function CompaniesPage() {
 
           <div className="mt-3">
             <Table>
-              <thead className="bg-zinc-50 text-left text-xs font-semibold text-zinc-600">
+              <thead className="bg-zinc-50 text-left text-sm font-semibold text-zinc-700">
                 <tr>
                   <th className="px-4 py-3">Ref ID</th>
-                  <th className="px-4 py-3">Company Name</th>
                   <th className="px-4 py-3">Logo</th>
+                  <th className="px-4 py-3">Company Name</th>
                   <th className="px-4 py-3">Total Jobs</th>
                   <th className="px-4 py-3">Status</th>
                 </tr>
@@ -124,8 +126,7 @@ export default function CompaniesPage() {
               <tbody>
                 {companies.map((c) => (
                   <tr key={c.id} className="border-t border-zinc-200">
-                    <td className="px-4 py-3 font-mono text-xs text-zinc-700">{c.ref_id}</td>
-                    <td className="px-4 py-3 text-sm font-medium text-zinc-900">{c.name}</td>
+                    <td className="px-4 py-3 text-sm text-zinc-700">{c.ref_id}</td>
                     <td className="px-4 py-3">
                       <div className="relative h-8 w-8 overflow-hidden rounded-md border border-zinc-200 bg-white">
                         {c.has_logo ? (
@@ -142,6 +143,7 @@ export default function CompaniesPage() {
                         )}
                       </div>
                     </td>
+                    <td className="px-4 py-3 text-sm font-medium text-zinc-900">{c.name}</td>
                     <td className="px-4 py-3 text-sm text-zinc-700">{c.total_jobs}</td>
                     <td className="px-4 py-3">
                       <StatusPill active={c.is_active} />
@@ -151,7 +153,8 @@ export default function CompaniesPage() {
                 {companies.length === 0 && !loading ? (
                   <tr>
                     <td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-500">
-                      No companies found. Click <span className="font-medium">New Company</span> to add one.
+                      No companies found. Click{" "}
+                      <span className="font-medium">New Company</span> to add one.
                     </td>
                   </tr>
                 ) : null}
