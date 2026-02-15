@@ -192,6 +192,120 @@ export async function createCompany(args: {
   }
 }
 
+export async function updateCompany(
+  companyId: string,
+  args: {
+    refId: string;
+    name: string;
+    description?: string | null;
+    industry?: string | null;
+    website?: string | null;
+    isActive?: boolean;
+
+    // if provided (not undefined), update logo; if undefined, keep existing
+    logoMime?: string | undefined;
+    logoBytes?: Buffer | undefined;
+
+    contactFirstName: string;
+    contactLastName: string;
+    contactEmail: string;
+    contactRole?: string | null;
+    contactPhone?: string | null;
+  }
+) {
+  const pool = db();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const sets: string[] = [];
+    const values: any[] = [];
+
+    const pushSet = (sqlFrag: string, val: any) => {
+      values.push(val);
+      sets.push(`${sqlFrag} $${values.length}`);
+    };
+
+    pushSet("ref_id =", args.refId);
+    pushSet("name =", args.name);
+    pushSet("description =", args.description ?? null);
+    pushSet("industry =", args.industry ?? null);
+    pushSet("website =", args.website ?? null);
+    pushSet("is_active =", args.isActive ?? true);
+
+    // Only update logo if a new file was uploaded
+    if (typeof args.logoBytes !== "undefined") {
+      values.push(args.logoMime ?? "image/png");
+      sets.push(`logo_mime = $${values.length}`);
+      values.push(args.logoBytes);
+      sets.push(`logo_bytes = $${values.length}`);
+    }
+
+    values.push(companyId);
+
+    await client.query(
+      `
+      UPDATE companies
+      SET ${sets.join(", ")}
+      WHERE id = $${values.length}
+      `,
+      values
+    );
+
+    // Update primary contact (or create if missing)
+    const existing = await client.query(
+      `SELECT id FROM company_contacts WHERE company_id = $1 AND is_primary = true LIMIT 1`,
+      [companyId]
+    );
+
+    if (existing.rowCount > 0) {
+      const contactId = existing.rows[0].id as string;
+      await client.query(
+        `
+        UPDATE company_contacts
+        SET first_name = $1,
+            last_name = $2,
+            email = $3,
+            role = $4,
+            phone = $5
+        WHERE id = $6
+        `,
+        [
+          args.contactFirstName,
+          args.contactLastName,
+          args.contactEmail,
+          args.contactRole ?? null,
+          args.contactPhone ?? null,
+          contactId,
+        ]
+      );
+    } else {
+      await client.query(
+        `
+        INSERT INTO company_contacts (company_id, first_name, last_name, email, role, phone, is_primary)
+        VALUES ($1,$2,$3,$4,$5,$6,true)
+        `,
+        [
+          companyId,
+          args.contactFirstName,
+          args.contactLastName,
+          args.contactEmail,
+          args.contactRole ?? null,
+          args.contactPhone ?? null,
+        ]
+      );
+    }
+
+    await client.query("COMMIT");
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
+
 export async function getCompanyLogo(id: string) {
   const pool = db();
   const res = await pool.query(
