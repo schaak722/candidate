@@ -6,7 +6,7 @@ export function Sidebar() {
   return (
     <aside className="w-64 shrink-0 border-r border-zinc-200 bg-white">
       {/* Header strip to align visually with main PageHeader */}
-      <div className="flex h-[76px] items-center border-b border-zinc-200 px-6">
+       <div className="flex h-[76px] items-center border-b border-zinc-200 bg-white px-6">
         {/* Logo should fill ~80% of this header strip */}
         <div className="relative h-[100px] w-full">
           <Image
