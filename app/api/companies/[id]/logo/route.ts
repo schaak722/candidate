@@ -3,13 +3,14 @@ import { getCompanyLogo } from "@/lib/companies";
 
 export const runtime = "nodejs";
 
-export async function GET(_req: Request, ctx: { params: { id: string } }) {
-  const { id } = ctx.params;
-  const logo = await getCompanyLogo(id);
+export async function GET(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
 
-  if (!logo) {
-    return new NextResponse(null, { status: 404 });
-  }
+  const logo = await getCompanyLogo(id);
+  if (!logo) return new NextResponse(null, { status: 404 });
 
   return new NextResponse(logo.bytes, {
     status: 200,
