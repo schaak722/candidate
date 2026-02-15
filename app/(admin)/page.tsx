@@ -1,10 +1,24 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from "react";
 import Image from "next/image";
 import Link from "next/link";
-import { MoreVertical, Pencil, Plus, X } from "lucide-react";
-import { Button, Card, Input, PageHeader, Select, Textarea, Label } from "@/components/ui";
+import { Pencil, Plus, X } from "lucide-react";
+import {
+  Button,
+  Card,
+  Input,
+  PageHeader,
+  Select,
+  Textarea,
+  Label,
+} from "@/components/ui";
 
 type Company = {
   id: string;
@@ -59,8 +73,8 @@ function ModalShell({
 }: {
   title: string;
   onClose: () => void;
-  children: React.ReactNode;
-  footer: React.ReactNode;
+  children: ReactNode;
+  footer: ReactNode;
 }) {
   return (
     <div className="fixed inset-0 z-50">
@@ -80,7 +94,9 @@ function ModalShell({
 
           <div className="max-h-[75vh] overflow-auto px-5 py-4">{children}</div>
 
-          <div className="border-t border-zinc-200 bg-zinc-50 px-5 py-4">{footer}</div>
+          <div className="border-t border-zinc-200 bg-zinc-50 px-5 py-4">
+            {footer}
+          </div>
         </div>
       </div>
     </div>
@@ -122,10 +138,10 @@ export default function CompaniesPage() {
     contactPhone: "",
   });
 
-  const [existingLogo, setExistingLogo] = useState<{ hasLogo: boolean; url: string | null }>({
-    hasLogo: false,
-    url: null,
-  });
+  const [existingLogo, setExistingLogo] = useState<{
+    hasLogo: boolean;
+    url: string | null;
+  }>({ hasLogo: false, url: null });
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -301,24 +317,35 @@ export default function CompaniesPage() {
                 />
               </div>
               <div>
-                <Select value={status} onChange={(e) => setStatus(e.target.value as any)}>
+                <Select
+                  value={status}
+                  onChange={(e) => setStatus(e.target.value as any)}
+                >
                   <option value="all">All</option>
                   <option value="active">Active</option>
                   <option value="inactive">Inactive</option>
                 </Select>
               </div>
             </div>
-            <div className="text-xs text-zinc-500">{loading ? "Loading..." : `${companies.length} result(s)`}</div>
+            <div className="text-xs text-zinc-500">
+              {loading ? "Loading..." : `${companies.length} result(s)`}
+            </div>
           </div>
         </Card>
 
         <div className="mt-4">
           {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {error}
+            </div>
           ) : null}
 
-          <div className="mt-3 overflow-hidden rounded-xl border border-zinc-200 bg-white">
-            <div ref={menuRootRef}>
+          {/* KEY FIX:
+              - overflow-x-auto so the right-most Actions column is never clipped
+              - inner min-width so table layout is stable
+          */}
+          <div className="mt-3 rounded-xl border border-zinc-200 bg-white overflow-x-auto">
+            <div ref={menuRootRef} className="min-w-[980px]">
               <table className="w-full border-collapse text-sm">
                 <thead className="bg-zinc-50 text-left text-sm font-semibold text-zinc-700">
                   <tr>
@@ -327,13 +354,15 @@ export default function CompaniesPage() {
                     <th className="px-4 py-3">Company Name</th>
                     <th className="px-4 py-3">Total Jobs</th>
                     <th className="px-4 py-3">Status</th>
-                    <th className="px-4 py-3 text-right" aria-label="Actions" />
+                    <th className="px-4 py-3 text-right"> </th>
                   </tr>
                 </thead>
                 <tbody>
                   {companies.map((c) => (
                     <tr key={c.id} className="border-t border-zinc-200">
-                      <td className="px-4 py-3 text-sm text-zinc-800">{c.ref_id}</td>
+                      <td className="px-4 py-3 text-sm text-zinc-800">
+                        {c.ref_id}
+                      </td>
 
                       <td className="px-4 py-3">
                         <div className="relative h-8 w-8 overflow-hidden rounded-md border border-zinc-200 bg-white">
@@ -352,20 +381,31 @@ export default function CompaniesPage() {
                         </div>
                       </td>
 
-                      <td className="px-4 py-3 text-sm font-medium text-zinc-900">{c.name}</td>
-                      <td className="px-4 py-3 text-sm text-zinc-700">{c.total_jobs}</td>
+                      {/* KEY FIX: truncate company name so it doesn't push Actions off-screen */}
+                      <td className="px-4 py-3 text-sm font-medium text-zinc-900 max-w-[520px] truncate">
+                        {c.name}
+                      </td>
+
+                      <td className="px-4 py-3 text-sm text-zinc-700">
+                        {c.total_jobs}
+                      </td>
+
                       <td className="px-4 py-3">
                         <StatusPill active={c.is_active} />
                       </td>
 
                       <td className="px-4 py-3 text-right">
                         <div className="relative inline-block">
+                          {/* Use a literal ellipsis so it always renders */}
                           <button
-                            className="rounded-lg p-2 text-zinc-600 hover:bg-zinc-100"
-                            onClick={() => setOpenMenuId((v) => (v === c.id ? null : c.id))}
+                            className="rounded-lg px-2 py-1 text-zinc-700 hover:bg-zinc-100 text-lg leading-none"
+                            onClick={() =>
+                              setOpenMenuId((v) => (v === c.id ? null : c.id))
+                            }
                             aria-label="Row actions"
+                            title="Actions"
                           >
-                            <MoreVertical className="h-4 w-4" />
+                            ⋯
                           </button>
 
                           {openMenuId === c.id ? (
@@ -386,8 +426,13 @@ export default function CompaniesPage() {
 
                   {companies.length === 0 && !loading ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-500">
-                        No companies found. Click <span className="font-medium">New Company</span> to add one.
+                      <td
+                        colSpan={6}
+                        className="px-4 py-10 text-center text-sm text-zinc-500"
+                      >
+                        No companies found. Click{" "}
+                        <span className="font-medium">New Company</span> to add
+                        one.
                       </td>
                     </tr>
                   ) : null}
@@ -405,52 +450,81 @@ export default function CompaniesPage() {
           onClose={() => setEditingId(null)}
           footer={
             <div className="flex items-center justify-end gap-2">
-              <Button variant="secondary" type="button" onClick={() => setEditingId(null)} disabled={editSaving}>
+              <Button
+                variant="secondary"
+                type="button"
+                onClick={() => setEditingId(null)}
+                disabled={editSaving}
+              >
                 Cancel
               </Button>
-              <Button type="button" onClick={saveEdit} disabled={editSaving || editLoading}>
+              <Button
+                type="button"
+                onClick={saveEdit}
+                disabled={editSaving || editLoading}
+              >
                 {editSaving ? "Saving..." : "Save"}
               </Button>
             </div>
           }
         >
           {editError ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{editError}</div>
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+              {editError}
+            </div>
           ) : null}
 
           {editLoading ? (
-            <div className="py-10 text-center text-sm text-zinc-600">Loading...</div>
+            <div className="py-10 text-center text-sm text-zinc-600">
+              Loading...
+            </div>
           ) : (
             <div className="space-y-4">
               <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                <div className="text-sm font-semibold text-zinc-900">Company Details</div>
+                <div className="text-sm font-semibold text-zinc-900">
+                  Company Details
+                </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <Label>Ref ID *</Label>
                     <Input
                       value={form.refId}
-                      onChange={(e) => setForm({ ...form, refId: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, refId: e.target.value })
+                      }
                       className={issueFor("refId") ? "border-red-300" : ""}
                     />
-                    {issueFor("refId") ? <div className="mt-1 text-xs text-red-600">{issueFor("refId")}</div> : null}
+                    {issueFor("refId") ? (
+                      <div className="mt-1 text-xs text-red-600">
+                        {issueFor("refId")}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div>
                     <Label>Company Name *</Label>
                     <Input
                       value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, name: e.target.value })
+                      }
                       className={issueFor("name") ? "border-red-300" : ""}
                     />
-                    {issueFor("name") ? <div className="mt-1 text-xs text-red-600">{issueFor("name")}</div> : null}
+                    {issueFor("name") ? (
+                      <div className="mt-1 text-xs text-red-600">
+                        {issueFor("name")}
+                      </div>
+                    ) : null}
                   </div>
 
                   <div className="md:col-span-2">
                     <Label>Company Description</Label>
                     <Textarea
                       value={form.description}
-                      onChange={(e) => setForm({ ...form, description: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, description: e.target.value })
+                      }
                       rows={4}
                       placeholder="Short company description…"
                     />
@@ -458,12 +532,22 @@ export default function CompaniesPage() {
 
                   <div>
                     <Label>Industry</Label>
-                    <Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
+                    <Input
+                      value={form.industry}
+                      onChange={(e) =>
+                        setForm({ ...form, industry: e.target.value })
+                      }
+                    />
                   </div>
 
                   <div>
                     <Label>Website</Label>
-                    <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
+                    <Input
+                      value={form.website}
+                      onChange={(e) =>
+                        setForm({ ...form, website: e.target.value })
+                      }
+                    />
                   </div>
 
                   <div className="md:col-span-2">
@@ -472,9 +556,15 @@ export default function CompaniesPage() {
                       <div className="relative h-[70px] w-[70px] overflow-hidden rounded-lg border border-zinc-200 bg-white">
                         {editLogoPreviewUrl ? (
                           // eslint-disable-next-line @next/next/no-img-element
-                          <img src={editLogoPreviewUrl} alt="Logo preview" className="h-full w-full object-contain p-1" />
+                          <img
+                            src={editLogoPreviewUrl}
+                            alt="Logo preview"
+                            className="h-full w-full object-contain p-1"
+                          />
                         ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">No logo</div>
+                          <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
+                            No logo
+                          </div>
                         )}
                       </div>
 
@@ -482,10 +572,14 @@ export default function CompaniesPage() {
                         <input
                           type="file"
                           accept="image/*"
-                          onChange={(e) => setEditLogoFile(e.target.files?.[0] ?? null)}
+                          onChange={(e) =>
+                            setEditLogoFile(e.target.files?.[0] ?? null)
+                          }
                           className="block w-full text-sm text-zinc-700 file:mr-4 file:rounded-lg file:border file:border-zinc-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-900 hover:file:bg-zinc-50"
                         />
-                        <div className="mt-1 text-xs text-zinc-500">Uploading a file will replace the current logo.</div>
+                        <div className="mt-1 text-xs text-zinc-500">
+                          Uploading a file will replace the current logo.
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -495,7 +589,9 @@ export default function CompaniesPage() {
                       <input
                         type="checkbox"
                         checked={form.isActive}
-                        onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
+                        onChange={(e) =>
+                          setForm({ ...form, isActive: e.target.checked })
+                        }
                         className="h-4 w-4 rounded border-zinc-300"
                       />
                       <span className="text-zinc-700">Active</span>
@@ -505,18 +601,29 @@ export default function CompaniesPage() {
               </div>
 
               <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                <div className="text-sm font-semibold text-zinc-900">Primary Contact</div>
+                <div className="text-sm font-semibold text-zinc-900">
+                  Primary Contact
+                </div>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
                     <Label>First Name *</Label>
                     <Input
                       value={form.contactFirstName}
-                      onChange={(e) => setForm({ ...form, contactFirstName: e.target.value })}
-                      className={issueFor("contactFirstName") ? "border-red-300" : ""}
+                      onChange={(e) =>
+                        setForm({
+                          ...form,
+                          contactFirstName: e.target.value,
+                        })
+                      }
+                      className={
+                        issueFor("contactFirstName") ? "border-red-300" : ""
+                      }
                     />
                     {issueFor("contactFirstName") ? (
-                      <div className="mt-1 text-xs text-red-600">{issueFor("contactFirstName")}</div>
+                      <div className="mt-1 text-xs text-red-600">
+                        {issueFor("contactFirstName")}
+                      </div>
                     ) : null}
                   </div>
 
@@ -524,11 +631,17 @@ export default function CompaniesPage() {
                     <Label>Last Name *</Label>
                     <Input
                       value={form.contactLastName}
-                      onChange={(e) => setForm({ ...form, contactLastName: e.target.value })}
-                      className={issueFor("contactLastName") ? "border-red-300" : ""}
+                      onChange={(e) =>
+                        setForm({ ...form, contactLastName: e.target.value })
+                      }
+                      className={
+                        issueFor("contactLastName") ? "border-red-300" : ""
+                      }
                     />
                     {issueFor("contactLastName") ? (
-                      <div className="mt-1 text-xs text-red-600">{issueFor("contactLastName")}</div>
+                      <div className="mt-1 text-xs text-red-600">
+                        {issueFor("contactLastName")}
+                      </div>
                     ) : null}
                   </div>
 
@@ -536,24 +649,37 @@ export default function CompaniesPage() {
                     <Label>Email Address *</Label>
                     <Input
                       value={form.contactEmail}
-                      onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
-                      className={issueFor("contactEmail") ? "border-red-300" : ""}
+                      onChange={(e) =>
+                        setForm({ ...form, contactEmail: e.target.value })
+                      }
+                      className={
+                        issueFor("contactEmail") ? "border-red-300" : ""
+                      }
                     />
                     {issueFor("contactEmail") ? (
-                      <div className="mt-1 text-xs text-red-600">{issueFor("contactEmail")}</div>
+                      <div className="mt-1 text-xs text-red-600">
+                        {issueFor("contactEmail")}
+                      </div>
                     ) : null}
                   </div>
 
                   <div>
                     <Label>Role</Label>
-                    <Input value={form.contactRole} onChange={(e) => setForm({ ...form, contactRole: e.target.value })} />
+                    <Input
+                      value={form.contactRole}
+                      onChange={(e) =>
+                        setForm({ ...form, contactRole: e.target.value })
+                      }
+                    />
                   </div>
 
                   <div className="md:col-span-2">
                     <Label>Contact Number</Label>
                     <Input
                       value={form.contactPhone}
-                      onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
+                      onChange={(e) =>
+                        setForm({ ...form, contactPhone: e.target.value })
+                      }
                     />
                   </div>
                 </div>
