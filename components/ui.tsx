@@ -7,12 +7,13 @@ export function Sidebar() {
     <aside className="w-64 shrink-0 border-r border-zinc-200 bg-white">
       {/* Header strip to align visually with main PageHeader */}
       <div className="flex h-[76px] items-center border-b border-zinc-200 px-6">
-        <div className="relative h-10 w-10 overflow-hidden rounded-lg bg-white">
+        {/* Logo should fill ~80% of this header strip */}
+        <div className="relative h-[60px] w-full">
           <Image
             src="/Candidate-Logo.png"
             alt="Candidate Logo"
             fill
-            className="object-contain"
+            className="object-contain object-left"
             priority
           />
         </div>
@@ -96,27 +97,22 @@ export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
 }
 
 export function Button({
+  children,
   variant = "primary",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & {
-  variant?: "primary" | "secondary";
-}) {
+}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" }) {
   const base =
-    "inline-flex h-10 items-center justify-center gap-2 rounded-lg px-4 text-sm font-medium transition";
-  const primary = "bg-zinc-900 text-white hover:bg-zinc-800";
-  const secondary = "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50";
-  const cls = variant === "primary" ? primary : secondary;
+    "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
+  const styles =
+    variant === "secondary"
+      ? "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50"
+      : "bg-zinc-900 text-white hover:bg-zinc-800";
 
   return (
-    <button
-      {...props}
-      className={[base, cls, props.className ?? ""].join(" ")}
-    />
+    <button {...props} className={[base, styles, props.className ?? ""].join(" ")}>
+      {children}
+    </button>
   );
-}
-
-export function Label({ children }: { children: React.ReactNode }) {
-  return <label className="text-xs font-medium text-zinc-700">{children}</label>;
 }
 
 export function Table({ children }: { children: React.ReactNode }) {
@@ -125,4 +121,8 @@ export function Table({ children }: { children: React.ReactNode }) {
       <table className="w-full border-collapse text-sm">{children}</table>
     </div>
   );
+}
+
+export function Label({ children }: { children: React.ReactNode }) {
+  return <div className="text-xs font-medium text-zinc-700">{children}</div>;
 }
