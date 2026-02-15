@@ -1,10 +1,26 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+  useRef,
+} from "react";
+import { createPortal } from "react-dom";
 import Link from "next/link";
 import Image from "next/image";
-import { Plus } from "lucide-react";
-import { Button, Card, Input, PageHeader, Select, Table } from "@/components/ui";
+import { Pencil, Plus, X } from "lucide-react";
+import {
+  Button,
+  Card,
+  Input,
+  Label,
+  PageHeader,
+  Select,
+  Table,
+  Textarea,
+} from "@/components/ui";
 
 type Company = {
   id: string;
@@ -14,6 +30,27 @@ type Company = {
   total_jobs: number;
   has_logo: boolean;
 };
+
+type CompanyDetail = {
+  id: string;
+  ref_id: string;
+  name: string;
+  description: string | null;
+  industry: string | null;
+  website: string | null;
+  is_active: boolean;
+  total_jobs: number;
+  has_logo: boolean;
+  contact: {
+    first_name: string;
+    last_name: string;
+    email: string;
+    role: string | null;
+    phone: string | null;
+  } | null;
+};
+
+type Issue = { path: (string | number)[]; message: string };
 
 function StatusPill({ active }: { active: boolean }) {
   return (
@@ -30,12 +67,82 @@ function StatusPill({ active }: { active: boolean }) {
   );
 }
 
+function ModalShell({
+  title,
+  onClose,
+  children,
+  footer,
+}: {
+  title: string;
+  onClose: () => void;
+  children: ReactNode;
+  footer: ReactNode;
+}) {
+  return (
+    <div className="fixed inset-0 z-50">
+      <div className="absolute inset-0 bg-black/30" onClick={onClose} />
+      <div className="absolute inset-0 flex items-center justify-center p-4">
+        <div className="w-full max-w-3xl overflow-hidden rounded-2xl border border-zinc-200 bg-white shadow-xl">
+          <div className="flex items-center justify-between border-b border-zinc-200 px-5 py-4">
+            <div className="text-sm font-semibold text-zinc-900">{title}</div>
+            <button
+              onClick={onClose}
+              className="rounded-lg p-2 text-zinc-500 hover:bg-zinc-100"
+              aria-label="Close"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="max-h-[75vh] overflow-auto px-5 py-4">{children}</div>
+
+          <div className="border-t border-zinc-200 bg-zinc-50 px-5 py-4">
+            {footer}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function CompaniesPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
+
+  // Actions popover (rendered via portal so it's not clipped by Table overflow-hidden)
+  const [menu, setMenu] = useState<null | { id: string; x: number; y: number }>(
+    null
+  );
+
+  // Edit modal state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editLoading, setEditLoading] = useState(false);
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const [editIssues, setEditIssues] = useState<Issue[]>([]);
+  const [editLogoFile, setEditLogoFile] = useState<File | null>(null);
+
+  const [form, setForm] = useState({
+    refId: "",
+    name: "",
+    description: "",
+    industry: "",
+    website: "",
+    isActive: true,
+
+    contactFirstName: "",
+    contactLastName: "",
+    contactEmail: "",
+    contactRole: "",
+    contactPhone: "",
+  });
+
+  const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null);
+  const objectUrlRef = useRef<string | null>(null);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -44,125 +151,69 @@ export default function CompaniesPage() {
     return p.toString();
   }, [search, status]);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      setError(null);
-      try {
-        const res = await fetch(`/api/companies?${query}`, { cache: "no-store" });
-        if (!res.ok) throw new Error(`Failed to load (${res.status})`);
-        const data = await res.json();
-        if (!cancelled) setCompanies(data.companies ?? []);
-      } catch (e: any) {
-        if (!cancelled) setError(String(e?.message ?? e));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  async function load() {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/companies?${query}`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`Failed to load (${res.status})`);
+      const data = await res.json();
+      setCompanies(data.companies ?? []);
+    } catch (e: any) {
+      setError(String(e?.message ?? e));
+    } finally {
+      setLoading(false);
     }
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [query]);
+  }
 
-  return (
-    <div className="min-h-screen">
-      <PageHeader
-        title="Companies"
-        subtitle="Search, filter and add new company profiles."
-        right={
-          <Link href="/companies/new">
-            <Button>
-              <Plus className="h-4 w-4" /> New Company
-            </Button>
-          </Link>
-        }
-      />
+  useEffect(() => {
+    void load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query, refreshKey]);
 
-      <div className="px-6 py-6">
-        <Card>
-          <div className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-            <div className="flex flex-1 flex-col gap-3 md:flex-row md:items-center">
-              <div className="w-full md:max-w-md">
-                <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by company name or Ref ID"
-                />
-              </div>
-              <div>
-                <Select value={status} onChange={(e) => setStatus(e.target.value as any)}>
-                  <option value="all">All</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </Select>
-              </div>
-            </div>
-            <div className="text-xs text-zinc-500">
-              {loading ? "Loading..." : `${companies.length} result(s)`}
-            </div>
-          </div>
-        </Card>
+  // Close actions menu on ESC
+  useEffect(() => {
+    function onEsc(e: KeyboardEvent) {
+      if (e.key === "Escape") setMenu(null);
+    }
+    document.addEventListener("keydown", onEsc);
+    return () => document.removeEventListener("keydown", onEsc);
+  }, []);
 
-        <div className="mt-4">
-          {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {error}
-            </div>
-          ) : null}
+  function issueFor(field: string) {
+    const found = editIssues.find((i) => i.path?.[0] === field);
+    return found?.message ?? null;
+  }
 
-          <div className="mt-3">
-            <Table>
-              <thead className="bg-zinc-50 text-left text-sm font-semibold text-zinc-700">
-                <tr>
-                  <th className="px-4 py-3">Ref ID</th>
-                  <th className="px-4 py-3">Logo</th>
-                  <th className="px-4 py-3">Company Name</th>
-                  <th className="px-4 py-3">Total Jobs</th>
-                  <th className="px-4 py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {companies.map((c) => (
-                  <tr key={c.id} className="border-t border-zinc-200">
-                    <td className="px-4 py-3 text-sm text-zinc-700">{c.ref_id}</td>
-                    <td className="px-4 py-3">
-                      <div className="relative h-8 w-8 overflow-hidden rounded-md border border-zinc-200 bg-white">
-                        {c.has_logo ? (
-                          <Image
-                            src={`/api/companies/${c.id}/logo`}
-                            alt={`${c.name} logo`}
-                            fill
-                            className="object-contain p-0.5"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] text-zinc-400">
-                            —
-                          </div>
-                        )}
-                      </div>
-                    </td>
-                    <td className="px-4 py-3 text-sm font-medium text-zinc-900">{c.name}</td>
-                    <td className="px-4 py-3 text-sm text-zinc-700">{c.total_jobs}</td>
-                    <td className="px-4 py-3">
-                      <StatusPill active={c.is_active} />
-                    </td>
-                  </tr>
-                ))}
-                {companies.length === 0 && !loading ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-sm text-zinc-500">
-                      No companies found. Click{" "}
-                      <span className="font-medium">New Company</span> to add one.
-                    </td>
-                  </tr>
-                ) : null}
-              </tbody>
-            </Table>
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+  async function openEdit(id: string) {
+    setMenu(null);
+    setEditingId(id);
+    setEditLoading(true);
+    setEditSaving(false);
+    setEditError(null);
+    setEditIssues([]);
+    setEditLogoFile(null);
+    setExistingLogoUrl(null);
+
+    // cleanup any previous preview URL
+    if (objectUrlRef.current) {
+      URL.revokeObjectURL(objectUrlRef.current);
+      objectUrlRef.current = null;
+    }
+
+    try {
+      const res = await fetch(`/api/companies/${id}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEditError(data?.error || `Failed to load (${res.status})`);
+        return;
+      }
+
+      const c: CompanyDetail = data.company;
+
+      setForm({
+        refId: c.ref_id ?? "",
+        name: c.name ?? "",
+        description: c.description ?? "",
+        industry: c.industry ?? "",
+        website: c.website
