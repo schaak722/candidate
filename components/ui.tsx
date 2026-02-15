@@ -16,7 +16,7 @@ export function Sidebar() {
       <div className="flex flex-col gap-3 bg-white px-6 py-5">
         <div className="relative h-[72px] w-full">
           <Image
-            src="/Candidate-Logo.png"
+            src="/CLogoR.png"
             alt="Candidate Logo"
             fill
             className="object-contain object-left"
