@@ -14,7 +14,7 @@ export function Sidebar() {
     <aside className="w-64 shrink-0 border-r border-zinc-200 bg-white">
       {/* Match PageHeader vertical rhythm so the divider aligns */}
       <div className="flex flex-col gap-3 bg-white px-6 py-5">
-        <div className="relative h-[52px] w-full">
+        <div className="relative h-[72px] w-full">
           <Image
             src="/Candidate-Logo.png"
             alt="Candidate Logo"
