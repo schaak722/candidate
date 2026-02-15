@@ -108,10 +108,10 @@ export function Button({
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" }) {
   const base =
     "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
-  const styles =
+    const styles =
     variant === "secondary"
       ? "border border-zinc-300 bg-white text-zinc-900 hover:bg-zinc-50"
-      : "bg-zinc-900 text-white hover:bg-zinc-800";
+      : "bg-[#ae4b67] text-white hover:bg-[#953f56]";
 
   return (
     <button {...props} className={[base, styles, props.className ?? ""].join(" ")}>
