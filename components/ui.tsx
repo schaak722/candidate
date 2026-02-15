@@ -1,14 +1,9 @@
-import Link from "next/link";
-import Image from "next/image";
-import { Building2 } from "lucide-react";
-
 export function Sidebar() {
   return (
     <aside className="w-64 shrink-0 border-r border-zinc-200 bg-white">
-      {/* Header strip to align visually with main PageHeader */}
-       <div className="flex h-[76px] items-center border-b border-zinc-200 bg-white px-6">
-        {/* Logo should fill ~80% of this header strip */}
-        <div className="relative h-[100px] w-full">
+      {/* Make this match PageHeader height so the border aligns with the main header border */}
+      <div className="flex flex-col gap-3 border-b border-zinc-200 bg-white px-6 py-5">
+        <div className="relative h-[52px] w-full">
           <Image
             src="/Candidate-Logo.png"
             alt="Candidate Logo"
@@ -19,7 +14,6 @@ export function Sidebar() {
         </div>
       </div>
 
-      {/* Push nav down to align with the main content (search bar/card area) */}
       <nav className="px-4 pt-6">
         <Link
           href="/companies"
