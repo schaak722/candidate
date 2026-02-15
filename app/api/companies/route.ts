@@ -59,12 +59,14 @@ export async function POST(req: Request) {
   let logoMime: string | null = null;
 
   if (file && typeof file !== "string") {
-    // @ts-expect-error - File type in node runtime
-    const f: File = file as any;
-    if (f.size > 0) {
+    const f = file as unknown as Blob; // FormData file is Blob-compatible in Next.js node runtime
+    const anyF = file as any;
+  
+    const size = typeof anyF.size === "number" ? anyF.size : 0;
+    if (size > 0) {
       const ab = await f.arrayBuffer();
       logoBytes = Buffer.from(ab);
-      logoMime = f.type || "image/png";
+      logoMime = typeof anyF.type === "string" && anyF.type ? anyF.type : "image/png";
     }
   }
 
