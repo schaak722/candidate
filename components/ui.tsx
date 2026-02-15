@@ -8,7 +8,7 @@ export function Sidebar() {
       {/* Header strip to align visually with main PageHeader */}
       <div className="flex h-[76px] items-center border-b border-zinc-200 px-6">
         {/* Logo should fill ~80% of this header strip */}
-        <div className="relative h-[60px] w-full">
+        <div className="relative h-[100px] w-full">
           <Image
             src="/Candidate-Logo.png"
             alt="Candidate Logo"
