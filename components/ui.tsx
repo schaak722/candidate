@@ -1,7 +1,18 @@
+import Link from "next/link";
+import Image from "next/image";
+import { Building2 } from "lucide-react";
+import type {
+  ReactNode,
+  InputHTMLAttributes,
+  TextareaHTMLAttributes,
+  SelectHTMLAttributes,
+  ButtonHTMLAttributes,
+} from "react";
+
 export function Sidebar() {
   return (
     <aside className="w-64 shrink-0 border-r border-zinc-200 bg-white">
-      {/* Make this match PageHeader height so the border aligns with the main header border */}
+      {/* Match PageHeader vertical rhythm so the divider aligns */}
       <div className="flex flex-col gap-3 border-b border-zinc-200 bg-white px-6 py-5">
         <div className="relative h-[52px] w-full">
           <Image
@@ -34,7 +45,7 @@ export function PageHeader({
 }: {
   title: string;
   subtitle?: string;
-  right?: React.ReactNode;
+  right?: ReactNode;
 }) {
   return (
     <div className="flex flex-col gap-3 border-b border-zinc-200 bg-white px-6 py-5 md:flex-row md:items-center md:justify-between">
@@ -47,11 +58,11 @@ export function PageHeader({
   );
 }
 
-export function Card({ children }: { children: React.ReactNode }) {
+export function Card({ children }: { children: ReactNode }) {
   return <div className="rounded-xl border border-zinc-200 bg-white shadow-sm">{children}</div>;
 }
 
-export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
+export function Input(props: InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
@@ -64,7 +75,7 @@ export function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   );
 }
 
-export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement>) {
+export function Textarea(props: TextareaHTMLAttributes<HTMLTextAreaElement>) {
   return (
     <textarea
       {...props}
@@ -77,7 +88,7 @@ export function Textarea(props: React.TextareaHTMLAttributes<HTMLTextAreaElement
   );
 }
 
-export function Select(props: React.SelectHTMLAttributes<HTMLSelectElement>) {
+export function Select(props: SelectHTMLAttributes<HTMLSelectElement>) {
   return (
     <select
       {...props}
@@ -94,7 +105,7 @@ export function Button({
   children,
   variant = "primary",
   ...props
-}: React.ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "primary" | "secondary" }) {
   const base =
     "inline-flex items-center gap-2 rounded-lg px-4 py-2 text-sm font-medium transition-colors disabled:opacity-50";
   const styles =
@@ -109,7 +120,7 @@ export function Button({
   );
 }
 
-export function Table({ children }: { children: React.ReactNode }) {
+export function Table({ children }: { children: ReactNode }) {
   return (
     <div className="overflow-hidden rounded-xl border border-zinc-200 bg-white">
       <table className="w-full border-collapse text-sm">{children}</table>
@@ -117,6 +128,6 @@ export function Table({ children }: { children: React.ReactNode }) {
   );
 }
 
-export function Label({ children }: { children: React.ReactNode }) {
+export function Label({ children }: { children: ReactNode }) {
   return <div className="text-xs font-medium text-zinc-700">{children}</div>;
 }
