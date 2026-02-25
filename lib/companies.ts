@@ -4,32 +4,25 @@ export type CompanyListItem = {
   id: string;
   ref_id: string;
   name: string;
-  is_active: boolean;
-  total_jobs: number;
-  has_logo: boolean;
-};
-
-export type CompanyDetail = {
-  id: string;
-  ref_id: string;
-  name: string;
   description: string | null;
   industry: string | null;
   website: string | null;
-  is_active: boolean;
   total_jobs: number;
-  logo_mime: string | null;
-  has_logo: boolean;
-  contact: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    role: string | null;
-    phone: string | null;
-  } | null;
+  is_active: boolean;
 };
 
-export async function listCompanies(params: { search?: string; status?: "all" | "active" | "inactive" }) {
+export type CompanyDetail = CompanyListItem & {
+  contact_first_name: string | null;
+  contact_last_name: string | null;
+  contact_email: string | null;
+  contact_role: string | null;
+  contact_phone: string | null;
+};
+
+export async function listCompanies(params: {
+  search?: string;
+  status?: "all" | "active" | "inactive";
+}) {
   const pool = db();
 
   const search = (params.search ?? "").trim();
@@ -38,31 +31,32 @@ export async function listCompanies(params: { search?: string; status?: "all" | 
   const where: string[] = [];
   const values: any[] = [];
 
+  if (status === "active") {
+    where.push(`c.total_jobs > 0`);
+  } else if (status === "inactive") {
+    where.push(`c.total_jobs = 0`);
+  }
+
   if (search) {
     values.push(`%${search}%`);
     where.push(`(c.name ILIKE $${values.length} OR c.ref_id ILIKE $${values.length})`);
   }
 
-  if (status === "active") where.push(`c.is_active = true`);
-  if (status === "inactive") where.push(`c.is_active = false`);
-
   const whereSql = where.length ? `WHERE ${where.join(" AND ")}` : "";
 
-  const sql = `
+  const res = await pool.query(
+    `
     SELECT
-      c.id,
-      c.ref_id,
-      c.name,
-      c.is_active,
-      c.total_jobs,
-      (c.logo_bytes IS NOT NULL) AS has_logo
+      c.id, c.ref_id, c.name, c.description, c.industry, c.website,
+      c.total_jobs, c.is_active
     FROM companies c
     ${whereSql}
-    ORDER BY c.name ASC
-    LIMIT 200;
-  `;
+    ORDER BY c.created_at DESC
+    LIMIT 500
+    `,
+    values
+  );
 
-  const res = await pool.query(sql, values);
   return res.rows as CompanyListItem[];
 }
 
@@ -71,87 +65,66 @@ export async function getCompany(id: string) {
   const res = await pool.query(
     `
     SELECT
-      c.id,
-      c.ref_id,
-      c.name,
-      c.description,
-      c.industry,
-      c.website,
-      c.is_active,
-      c.total_jobs,
-      c.logo_mime,
-      (c.logo_bytes IS NOT NULL) AS has_logo,
-      cc.first_name,
-      cc.last_name,
-      cc.email,
+      c.id, c.ref_id, c.name, c.description, c.industry, c.website,
+      c.total_jobs, c.is_active,
+      cc.first_name AS contact_first_name,
+      cc.last_name AS contact_last_name,
+      cc.email AS contact_email,
       cc.role AS contact_role,
       cc.phone AS contact_phone
     FROM companies c
-    LEFT JOIN LATERAL (
-      SELECT * FROM company_contacts
-      WHERE company_id = c.id AND is_primary = true
-      ORDER BY created_at ASC
-      LIMIT 1
-    ) cc ON true
+    LEFT JOIN company_contacts cc
+      ON cc.company_id = c.id AND cc.is_primary = true
     WHERE c.id = $1
     `,
     [id]
   );
 
   if (res.rowCount === 0) return null;
+  return res.rows[0] as CompanyDetail;
+}
 
-  const r = res.rows[0];
-  const detail: CompanyDetail = {
-    id: r.id,
-    ref_id: r.ref_id,
-    name: r.name,
-    description: r.description,
-    industry: r.industry,
-    website: r.website,
-    is_active: r.is_active,
-    total_jobs: r.total_jobs,
-    logo_mime: r.logo_mime,
-    has_logo: r.has_logo,
-    contact: r.email
-      ? {
-          first_name: r.first_name,
-          last_name: r.last_name,
-          email: r.email,
-          role: r.contact_role,
-          phone: r.contact_phone,
-        }
-      : null,
-  };
-
-  return detail;
+export async function getCompanyLogo(id: string) {
+  const pool = db();
+  const res = await pool.query(
+    `SELECT logo_mime, logo_bytes FROM companies WHERE id = $1`,
+    [id]
+  );
+  if (res.rowCount === 0) return null;
+  return res.rows[0] as { logo_mime: string | null; logo_bytes: Buffer | null };
 }
 
 export async function createCompany(args: {
   refId: string;
   name: string;
-  description?: string | null;
-  industry?: string | null;
-  website?: string | null;
-  isActive?: boolean;
-  logoMime?: string | null;
-  logoBytes?: Buffer | null;
+  description?: string;
+  industry?: string;
+  website?: string;
 
   contactFirstName: string;
   contactLastName: string;
   contactEmail: string;
-  contactRole?: string | null;
-  contactPhone?: string | null;
+  contactRole?: string;
+  contactPhone?: string;
+
+  logoBytes?: Buffer;
+  logoMime?: string;
 }) {
   const pool = db();
   const client = await pool.connect();
+
   try {
     await client.query("BEGIN");
 
-    const c = await client.query(
+    const ins = await client.query(
       `
-      INSERT INTO companies (ref_id, name, description, industry, website, is_active, logo_mime, logo_bytes)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
-      RETURNING id;
+      INSERT INTO companies (
+        ref_id, name, description, industry, website,
+        is_active, total_jobs,
+        logo_mime, logo_bytes
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+      RETURNING id
       `,
       [
         args.refId,
@@ -159,18 +132,21 @@ export async function createCompany(args: {
         args.description ?? null,
         args.industry ?? null,
         args.website ?? null,
-        args.isActive ?? true,
+        false, // starts inactive until it has open jobs
+        0,
         args.logoMime ?? null,
         args.logoBytes ?? null,
       ]
     );
 
-    const companyId = c.rows[0].id as string;
+    const companyId = ins.rows[0].id as string;
 
     await client.query(
       `
-      INSERT INTO company_contacts (company_id, first_name, last_name, email, role, phone, is_primary)
-      VALUES ($1,$2,$3,$4,$5,$6,true);
+      INSERT INTO company_contacts (
+        company_id, first_name, last_name, email, role, phone, is_primary
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,true)
       `,
       [
         companyId,
@@ -193,24 +169,23 @@ export async function createCompany(args: {
 }
 
 export async function updateCompany(
-  companyId: string,
+  id: string,
   args: {
     refId: string;
     name: string;
-    description?: string | null;
-    industry?: string | null;
-    website?: string | null;
-    isActive?: boolean;
-
-    // if provided (not undefined), update logo; if undefined, keep existing
-    logoMime?: string | undefined;
-    logoBytes?: Buffer | undefined;
+    description?: string;
+    industry?: string;
+    website?: string;
 
     contactFirstName: string;
     contactLastName: string;
     contactEmail: string;
-    contactRole?: string | null;
-    contactPhone?: string | null;
+    contactRole?: string;
+    contactPhone?: string;
+
+    // Optional: if undefined => keep existing logo
+    logoBytes?: Buffer;
+    logoMime?: string;
   }
 ) {
   const pool = db();
@@ -219,30 +194,30 @@ export async function updateCompany(
   try {
     await client.query("BEGIN");
 
-    const sets: string[] = [];
-    const values: any[] = [];
+    const sets: string[] = [
+      `ref_id = $1`,
+      `name = $2`,
+      `description = $3`,
+      `industry = $4`,
+      `website = $5`,
+    ];
 
-    const pushSet = (sqlFrag: string, val: any) => {
-      values.push(val);
-      sets.push(`${sqlFrag} $${values.length}`);
-    };
+    const values: any[] = [
+      args.refId,
+      args.name,
+      args.description ?? null,
+      args.industry ?? null,
+      args.website ?? null,
+    ];
 
-    pushSet("ref_id =", args.refId);
-    pushSet("name =", args.name);
-    pushSet("description =", args.description ?? null);
-    pushSet("industry =", args.industry ?? null);
-    pushSet("website =", args.website ?? null);
-    pushSet("is_active =", args.isActive ?? true);
-
-    // Only update logo if a new file was uploaded
-    if (typeof args.logoBytes !== "undefined") {
-      values.push(args.logoMime ?? "image/png");
-      sets.push(`logo_mime = $${values.length}`);
-      values.push(args.logoBytes);
+    // Only update logo if a new one is provided
+    if (args.logoBytes && args.logoMime) {
+      values.push(args.logoMime, args.logoBytes);
+      sets.push(`logo_mime = $${values.length - 1}`);
       sets.push(`logo_bytes = $${values.length}`);
     }
 
-    values.push(companyId);
+    values.push(id);
 
     await client.query(
       `
@@ -253,10 +228,10 @@ export async function updateCompany(
       values
     );
 
-    // Update primary contact (or create if missing)
+    // Upsert primary contact
     const existing = await client.query(
-      `SELECT id FROM company_contacts WHERE company_id = $1 AND is_primary = true LIMIT 1`,
-      [companyId]
+      `SELECT id FROM company_contacts WHERE company_id = $1 AND is_primary = true`,
+      [id]
     );
 
     if (existing.rowCount > 0) {
@@ -283,11 +258,13 @@ export async function updateCompany(
     } else {
       await client.query(
         `
-        INSERT INTO company_contacts (company_id, first_name, last_name, email, role, phone, is_primary)
+        INSERT INTO company_contacts (
+          company_id, first_name, last_name, email, role, phone, is_primary
+        )
         VALUES ($1,$2,$3,$4,$5,$6,true)
         `,
         [
-          companyId,
+          id,
           args.contactFirstName,
           args.contactLastName,
           args.contactEmail,
@@ -298,22 +275,11 @@ export async function updateCompany(
     }
 
     await client.query("COMMIT");
+    return true;
   } catch (e) {
     await client.query("ROLLBACK");
     throw e;
   } finally {
     client.release();
   }
-}
-
-export async function getCompanyLogo(id: string) {
-  const pool = db();
-  const res = await pool.query(
-    `SELECT logo_mime, logo_bytes FROM companies WHERE id = $1`,
-    [id]
-  );
-  if (res.rowCount === 0) return null;
-  const r = res.rows[0];
-  if (!r.logo_bytes) return null;
-  return { mime: (r.logo_mime as string) || "image/png", bytes: r.logo_bytes as Buffer };
 }
