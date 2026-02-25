@@ -3,7 +3,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
 import { Plus, Trash2, X } from "lucide-react";
 import { Button, Card, Input, Label, PageHeader, Select, Table } from "@/components/ui";
 
@@ -69,8 +68,6 @@ function safeHtml(html: string) {
 }
 
 export default function JobsPage() {
-  const sp = useSearchParams();
-
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | Job["status"]>("all");
   const [companyId, setCompanyId] = useState<string>("");
@@ -90,16 +87,19 @@ export default function JobsPage() {
   const [viewError, setViewError] = useState<string | null>(null);
   const [viewJob, setViewJob] = useState<JobDetail | null>(null);
 
-  // init from URL once
+  // ✅ IMPORTANT: do NOT use useSearchParams() (requires Suspense in Next 15).
+  // Instead, read URL params on the client only.
   useEffect(() => {
+    if (typeof window === "undefined") return;
+
+    const sp = new URLSearchParams(window.location.search);
     const s = (sp.get("status") || "").toLowerCase();
     const c = sp.get("companyId") || "";
     const q = sp.get("search") || "";
 
     if (q) setSearch(q);
     if (c) setCompanyId(c);
-    if (s === "open" || s === "closed" || s === "draft" || s === "all") setStatus(s);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (s === "open" || s === "closed" || s === "draft" || s === "all") setStatus(s as any);
   }, []);
 
   const query = useMemo(() => {
@@ -156,7 +156,11 @@ export default function JobsPage() {
     return (
       <div className="inline-flex items-center gap-2 rounded-full border border-zinc-200 bg-zinc-50 px-3 py-1 text-xs text-zinc-700">
         <span>Company: {label}</span>
-        <button className="rounded-full px-2 py-0.5 text-zinc-600 hover:bg-zinc-200" onClick={() => setCompanyId("")} type="button">
+        <button
+          className="rounded-full px-2 py-0.5 text-zinc-600 hover:bg-zinc-200"
+          onClick={() => setCompanyId("")}
+          type="button"
+        >
           Clear
         </button>
       </div>
@@ -353,16 +357,10 @@ export default function JobsPage() {
                       <div className="mt-2 flex flex-wrap items-center gap-2 text-xs text-zinc-600">
                         <span className="rounded-full bg-zinc-100 px-2 py-1">Status: {viewJob.status}</span>
                         {viewJob.ref_id ? <span className="rounded-full bg-zinc-100 px-2 py-1">Ref: {viewJob.ref_id}</span> : null}
-                        {viewJob.closing_date ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-1">Closes: {viewJob.closing_date}</span>
-                        ) : null}
-                        {viewJob.seniority ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-1">Seniority: {viewJob.seniority}</span>
-                        ) : null}
+                        {viewJob.closing_date ? <span className="rounded-full bg-zinc-100 px-2 py-1">Closes: {viewJob.closing_date}</span> : null}
+                        {viewJob.seniority ? <span className="rounded-full bg-zinc-100 px-2 py-1">Seniority: {viewJob.seniority}</span> : null}
                         {viewJob.basis ? <span className="rounded-full bg-zinc-100 px-2 py-1">Basis: {viewJob.basis}</span> : null}
-                        {viewJob.location ? (
-                          <span className="rounded-full bg-zinc-100 px-2 py-1">Location: {viewJob.location}</span>
-                        ) : null}
+                        {viewJob.location ? <span className="rounded-full bg-zinc-100 px-2 py-1">Location: {viewJob.location}</span> : null}
                       </div>
 
                       <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
