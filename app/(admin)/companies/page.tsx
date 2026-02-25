@@ -91,7 +91,7 @@ export default function CompaniesPage() {
   const [viewError, setViewError] = useState<string | null>(null);
   const [viewCompany, setViewCompany] = useState<CompanyDetail | null>(null);
 
-  // Edit modal (existing, but remove Active checkbox)
+  // Edit modal
   const [editId, setEditId] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
@@ -335,12 +335,16 @@ export default function CompaniesPage() {
                         <img
                           src={`/api/companies/${c.id}/logo`}
                           alt=""
-                          className="h-8 w-8 rounded-md border border-zinc-200 object-cover"
+                          className="h-8 w-8 rounded-md border border-zinc-200 bg-white object-contain p-1"
                           onError={(e) => ((e.currentTarget.style.display = "none"))}
                         />
                       </td>
                       <td className="px-4 py-3 text-sm font-medium text-zinc-900">
-                        <button type="button" className="hover:underline" onClick={() => openView(c.id)}>
+                        <button
+                          type="button"
+                          className="text-left hover:text-zinc-700"
+                          onClick={() => openView(c.id)}
+                        >
                           {c.name}
                         </button>
                       </td>
@@ -402,7 +406,7 @@ export default function CompaniesPage() {
                   <img
                     src={`/api/companies/${viewCompany.id}/logo`}
                     alt=""
-                    className="h-[70px] w-[70px] rounded-xl border border-zinc-200 object-cover"
+                    className="h-[70px] w-[70px] rounded-xl border border-zinc-200 bg-white object-contain p-1"
                     onError={(e) => ((e.currentTarget.style.display = "none"))}
                   />
                   <div>
@@ -518,7 +522,7 @@ export default function CompaniesPage() {
                       <img
                         src={`/api/companies/${editId}/logo`}
                         alt=""
-                        className="h-[70px] w-[70px] rounded-xl border border-zinc-200 object-cover"
+                        className="h-[70px] w-[70px] rounded-xl border border-zinc-200 bg-white object-contain p-1"
                         onError={(e) => ((e.currentTarget.style.display = "none"))}
                       />
                       <input
@@ -528,7 +532,7 @@ export default function CompaniesPage() {
                       />
                     </div>
                     <div className="mt-1 text-xs text-zinc-500">
-                      Active/Inactive is now derived from Open Jobs count (no checkbox).
+                      Active/Inactive is derived from Open Jobs count (no checkbox).
                     </div>
                   </div>
                 </div>
