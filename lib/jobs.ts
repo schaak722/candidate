@@ -264,3 +264,31 @@ export async function updateJob(
     client.release();
   }
 }
+
+export async function deleteJob(id: string) {
+  const pool = db();
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const prev = await client.query(`SELECT company_id FROM jobs WHERE id = $1`, [id]);
+    if (prev.rowCount === 0) {
+      await client.query("ROLLBACK");
+      return { notFound: true as const };
+    }
+
+    const companyId = prev.rows[0].company_id as string;
+
+    await client.query(`DELETE FROM jobs WHERE id = $1`, [id]);
+    await recomputeCompanyOpenJobs(client, companyId);
+
+    await client.query("COMMIT");
+    return { notFound: false as const };
+  } catch (e) {
+    await client.query("ROLLBACK");
+    throw e;
+  } finally {
+    client.release();
+  }
+}
