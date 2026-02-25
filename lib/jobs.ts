@@ -8,6 +8,7 @@ export type JobListItem = {
   ref_id: string | null;
   title: string;
   status: "open" | "closed" | "draft";
+  closing_date: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -21,6 +22,9 @@ export type JobDetail = {
   location: string | null;
   basis: string | null;
   seniority: string | null;
+  closing_date: string | null;
+  salary_bands: string[];
+  categories: string[];
   description: string | null;
   created_at: string;
   updated_at: string;
@@ -36,7 +40,11 @@ async function recomputeCompanyOpenJobs(
     SET total_jobs = (
       SELECT COUNT(*)::int FROM jobs
       WHERE company_id = $1 AND status = 'open'
-    )
+    ),
+    is_active = (
+      SELECT COUNT(*)::int FROM jobs
+      WHERE company_id = $1 AND status = 'open'
+    ) > 0
     WHERE id = $1
     `,
     [companyId]
@@ -85,6 +93,7 @@ export async function listJobs(params: {
       j.ref_id,
       j.title,
       j.status,
+      j.closing_date,
       j.created_at,
       j.updated_at
     FROM jobs j
@@ -111,6 +120,9 @@ export async function getJob(id: string) {
       location,
       basis,
       seniority,
+      closing_date,
+      salary_bands,
+      categories,
       description,
       created_at,
       updated_at
@@ -132,7 +144,10 @@ export async function createJob(args: {
   location?: string | null;
   basis?: string | null;
   seniority?: string | null;
-  description?: string | null;
+  closingDate?: string | null; // YYYY-MM-DD
+  salaryBands?: string[];
+  categories: string[];
+  description?: string | null; // HTML
 }) {
   const pool = db();
   const client = await pool.connect();
@@ -141,8 +156,11 @@ export async function createJob(args: {
 
     const ins = await client.query(
       `
-      INSERT INTO jobs (company_id, ref_id, title, status, location, basis, seniority, description)
-      VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+      INSERT INTO jobs (
+        company_id, ref_id, title, status, location, basis, seniority,
+        closing_date, salary_bands, categories, description
+      )
+      VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11)
       RETURNING id;
       `,
       [
@@ -153,6 +171,9 @@ export async function createJob(args: {
         args.location ?? null,
         args.basis ?? null,
         args.seniority ?? null,
+        args.closingDate ? args.closingDate : null,
+        args.salaryBands ?? [],
+        args.categories ?? [],
         args.description ?? null,
       ]
     );
@@ -179,6 +200,9 @@ export async function updateJob(
     location?: string | null;
     basis?: string | null;
     seniority?: string | null;
+    closingDate?: string | null;
+    salaryBands?: string[];
+    categories: string[];
     description?: string | null;
   }
 ) {
@@ -204,8 +228,11 @@ export async function updateJob(
           location = $5,
           basis = $6,
           seniority = $7,
-          description = $8
-      WHERE id = $9
+          closing_date = $8,
+          salary_bands = $9,
+          categories = $10,
+          description = $11
+      WHERE id = $12
       `,
       [
         args.companyId,
@@ -215,42 +242,18 @@ export async function updateJob(
         args.location ?? null,
         args.basis ?? null,
         args.seniority ?? null,
+        args.closingDate ? args.closingDate : null,
+        args.salaryBands ?? [],
+        args.categories ?? [],
         args.description ?? null,
         id,
       ]
     );
 
-    // Recompute counts for both old and new companies (in case company changed)
     await recomputeCompanyOpenJobs(client, prevCompanyId);
     if (args.companyId !== prevCompanyId) {
       await recomputeCompanyOpenJobs(client, args.companyId);
     }
-
-    await client.query("COMMIT");
-    return { notFound: false as const };
-  } catch (e) {
-    await client.query("ROLLBACK");
-    throw e;
-  } finally {
-    client.release();
-  }
-}
-
-export async function deleteJob(id: string) {
-  const pool = db();
-  const client = await pool.connect();
-  try {
-    await client.query("BEGIN");
-
-    const prev = await client.query(`SELECT company_id FROM jobs WHERE id = $1`, [id]);
-    if (prev.rowCount === 0) {
-      await client.query("ROLLBACK");
-      return { notFound: true as const };
-    }
-    const companyId = prev.rows[0].company_id as string;
-
-    await client.query(`DELETE FROM jobs WHERE id = $1`, [id]);
-    await recomputeCompanyOpenJobs(client, companyId);
 
     await client.query("COMMIT");
     return { notFound: false as const };
