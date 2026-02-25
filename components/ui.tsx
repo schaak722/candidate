@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Building2 } from "lucide-react";
+import { Briefcase, Building2 } from "lucide-react";
 import type {
   ReactNode,
   InputHTMLAttributes,
@@ -32,6 +32,14 @@ export function Sidebar() {
         >
           <Building2 className="h-5 w-5" />
           Companies
+        </Link>
+
+        <Link
+          href="/jobs"
+          className="mt-2 flex items-center gap-3 rounded-xl px-3 py-3 text-base font-semibold text-zinc-900 hover:bg-zinc-100"
+        >
+          <Briefcase className="h-5 w-5" />
+          Jobs
         </Link>
       </nav>
     </aside>
