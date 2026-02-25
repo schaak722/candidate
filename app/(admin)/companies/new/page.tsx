@@ -19,7 +19,6 @@ export default function NewCompanyPage() {
     description: "",
     industry: "",
     website: "",
-    isActive: true,
     contactFirstName: "",
     contactLastName: "",
     contactEmail: "",
@@ -40,7 +39,6 @@ export default function NewCompanyPage() {
     try {
       const fd = new FormData();
       Object.entries(form).forEach(([k, v]) => fd.set(k, String(v)));
-      fd.set("isActive", String(form.isActive));
       if (logoFile) fd.set("logo", logoFile);
 
       const res = await fetch("/api/companies", { method: "POST", body: fd });
@@ -175,15 +173,9 @@ export default function NewCompanyPage() {
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="flex items-center gap-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={form.isActive}
-                      onChange={(e) => setForm({ ...form, isActive: e.target.checked })}
-                      className="h-4 w-4 rounded border-zinc-300"
-                    />
-                    <span className="text-zinc-700">Active</span>
-                  </label>
+                  <div className="rounded-xl border border-zinc-200 bg-zinc-50 p-3 text-xs text-zinc-600">
+                    Company status (Active/Inactive) is determined automatically by whether the company has any <b>Open</b> jobs.
+                  </div>
                 </div>
               </div>
             </div>
