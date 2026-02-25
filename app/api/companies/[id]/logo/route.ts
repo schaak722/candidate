@@ -10,13 +10,15 @@ export async function GET(
   const { id } = await params;
 
   const logo = await getCompanyLogo(id);
-  if (!logo) return new NextResponse(null, { status: 404 });
+  if (!logo || !logo.logo_bytes) {
+    return new NextResponse(null, { status: 404 });
+  }
 
-  return new NextResponse(logo.bytes, {
+  return new NextResponse(logo.logo_bytes, {
     status: 200,
     headers: {
-      "Content-Type": logo.mime,
-      "Cache-Control": "public, max-age=86400",
+      "Content-Type": logo.logo_mime || "application/octet-stream",
+      "Cache-Control": "public, max-age=3600",
     },
   });
 }
