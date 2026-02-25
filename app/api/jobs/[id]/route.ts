@@ -1,26 +1,23 @@
 import { NextResponse } from "next/server";
-import { CreateJobSchema } from "@/lib/validation";
-import { deleteJob, getJob, updateJob } from "@/lib/jobs";
+import { CreateJobSchema, JobStatus } from "@/lib/validation";
+import { createJob, listJobs } from "@/lib/jobs";
 
 export const runtime = "nodejs";
 
-export async function GET(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
+export async function GET(req: Request) {
+  const { searchParams } = new URL(req.url);
+  const search = searchParams.get("search") ?? "";
+  const statusRaw = (searchParams.get("status") ?? "all") as any;
+  const companyId = searchParams.get("companyId") ?? "";
 
-  const job = await getJob(id);
-  if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json({ job });
+  const statusParsed = JobStatus.safeParse(statusRaw);
+  const status = statusParsed.success ? statusParsed.data : "all";
+
+  const rows = await listJobs({ search, status, companyId });
+  return NextResponse.json({ jobs: rows });
 }
 
-export async function PATCH(
-  req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-
+export async function POST(req: Request) {
   let body: any = null;
   try {
     body = await req.json();
@@ -37,25 +34,21 @@ export async function PATCH(
   }
 
   try {
-    const res = await updateJob(id, {
+    const id = await createJob({
       companyId: parsed.data.companyId,
-      refId: parsed.data.refId?.trim() ? parsed.data.refId.trim() : null,
+      refId: parsed.data.refId.trim(),
       title: parsed.data.title,
       status: parsed.data.status,
+      basis: parsed.data.basis.trim(),
       location: parsed.data.location?.trim() ? parsed.data.location.trim() : null,
-      basis: parsed.data.basis?.trim() ? parsed.data.basis.trim() : null,
       seniority: parsed.data.seniority ?? null,
-      closingDate: parsed.data.closingDate?.trim() ? parsed.data.closingDate.trim() : null,
+      closingDate: parsed.data.closingDate.trim(),
       salaryBands: parsed.data.salaryBands ?? [],
       categories: parsed.data.categories,
-      description: parsed.data.description?.trim() ? parsed.data.description.trim() : null,
+      description: parsed.data.description, // HTML
     });
 
-    if (res.notFound) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ id }, { status: 201 });
   } catch (e: any) {
     if (e?.code === "23505") {
       return NextResponse.json(
@@ -64,27 +57,7 @@ export async function PATCH(
       );
     }
     return NextResponse.json(
-      { error: "Update failed", detail: String(e?.message ?? e) },
-      { status: 500 }
-    );
-  }
-}
-
-export async function DELETE(
-  _req: Request,
-  { params }: { params: Promise<{ id: string }> }
-) {
-  const { id } = await params;
-
-  try {
-    const res = await deleteJob(id);
-    if (res.notFound) {
-      return NextResponse.json({ error: "Not found" }, { status: 404 });
-    }
-    return NextResponse.json({ ok: true });
-  } catch (e: any) {
-    return NextResponse.json(
-      { error: "Delete failed", detail: String(e?.message ?? e) },
+      { error: "Create failed", detail: String(e?.message ?? e) },
       { status: 500 }
     );
   }
