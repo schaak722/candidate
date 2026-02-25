@@ -36,16 +36,16 @@ export async function POST(req: Request) {
   try {
     const id = await createJob({
       companyId: parsed.data.companyId,
-      refId: parsed.data.refId?.trim() ? parsed.data.refId.trim() : null,
+      refId: parsed.data.refId.trim(),
       title: parsed.data.title,
       status: parsed.data.status,
+      basis: parsed.data.basis.trim(),
       location: parsed.data.location?.trim() ? parsed.data.location.trim() : null,
-      basis: parsed.data.basis?.trim() ? parsed.data.basis.trim() : null,
       seniority: parsed.data.seniority ?? null,
-      closingDate: parsed.data.closingDate?.trim() ? parsed.data.closingDate.trim() : null,
+      closingDate: parsed.data.closingDate.trim(),
       salaryBands: parsed.data.salaryBands ?? [],
       categories: parsed.data.categories,
-      description: parsed.data.description?.trim() ? parsed.data.description.trim() : null,
+      description: parsed.data.description, // HTML
     });
 
     return NextResponse.json({ id }, { status: 201 });
