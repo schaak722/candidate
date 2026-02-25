@@ -41,10 +41,11 @@ export async function POST(req: Request) {
       status: parsed.data.status,
       location: parsed.data.location?.trim() ? parsed.data.location.trim() : null,
       basis: parsed.data.basis?.trim() ? parsed.data.basis.trim() : null,
-      seniority: parsed.data.seniority?.trim() ? parsed.data.seniority.trim() : null,
-      description: parsed.data.description?.trim()
-        ? parsed.data.description.trim()
-        : null,
+      seniority: parsed.data.seniority ?? null,
+      closingDate: parsed.data.closingDate?.trim() ? parsed.data.closingDate.trim() : null,
+      salaryBands: parsed.data.salaryBands ?? [],
+      categories: parsed.data.categories,
+      description: parsed.data.description?.trim() ? parsed.data.description.trim() : null,
     });
 
     return NextResponse.json({ id }, { status: 201 });
