@@ -1,15 +1,20 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
-import { Button, Card, Input, Label, PageHeader, Select, Textarea } from "@/components/ui";
+import { Button, Card, Input, Label, PageHeader, Select } from "@/components/ui";
+import { MultiSelect } from "@/components/multi-select";
+import { RichTextEditor } from "@/components/rich-text-editor";
+import { JOB_CATEGORIES, SALARY_BANDS, SENIORITY_OPTIONS } from "@/lib/job-options";
 
 type CompanyOption = { id: string; name: string; ref_id: string };
 type Issue = { path: (string | number)[]; message: string };
 
 export default function NewJobPage() {
   const [companies, setCompanies] = useState<CompanyOption[]>([]);
+  const [companyQuery, setCompanyQuery] = useState("");
+  const [companyOpen, setCompanyOpen] = useState(false);
 
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -19,10 +24,13 @@ export default function NewJobPage() {
     companyId: "",
     refId: "",
     title: "",
-    status: "open" as "open" | "closed" | "draft",
+    status: "draft" as "open" | "closed" | "draft",
     location: "",
     basis: "",
-    seniority: "",
+    seniority: "" as "" | (typeof SENIORITY_OPTIONS)[number],
+    closingDate: "", // YYYY-MM-DD
+    salaryBands: [] as string[],
+    categories: [] as string[],
     description: "",
   });
 
@@ -45,6 +53,24 @@ export default function NewJobPage() {
     return found?.message ?? null;
   }
 
+  const companyMatches = useMemo(() => {
+    const q = companyQuery.trim().toLowerCase();
+    if (q.length < 2) return [];
+    return companies
+      .filter(
+        (c) =>
+          c.name.toLowerCase().includes(q) ||
+          c.ref_id.toLowerCase().includes(q)
+      )
+      .slice(0, 12);
+  }, [companies, companyQuery]);
+
+  function selectCompany(c: CompanyOption) {
+    setForm((f) => ({ ...f, companyId: c.id }));
+    setCompanyQuery(`${c.name} (${c.ref_id})`);
+    setCompanyOpen(false);
+  }
+
   async function submit() {
     setBusy(true);
     setError(null);
@@ -61,7 +87,10 @@ export default function NewJobPage() {
           status: form.status,
           location: form.location,
           basis: form.basis,
-          seniority: form.seniority,
+          seniority: form.seniority || undefined,
+          closingDate: form.closingDate || "",
+          salaryBands: form.salaryBands,
+          categories: form.categories,
           description: form.description,
         }),
       });
@@ -84,6 +113,9 @@ export default function NewJobPage() {
       setBusy(false);
     }
   }
+
+  const salaryOptions = SALARY_BANDS.map((s) => ({ value: s.value, label: s.label }));
+  const categoryOptions = JOB_CATEGORIES.map((c) => ({ value: c, label: c }));
 
   return (
     <div className="min-h-screen">
@@ -110,20 +142,38 @@ export default function NewJobPage() {
               <h2 className="text-sm font-semibold text-zinc-900">Job Details</h2>
 
               <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
-                <div>
+                {/* Company typeahead */}
+                <div className="md:col-span-2">
                   <Label>Company *</Label>
-                  <Select
-                    value={form.companyId}
-                    onChange={(e) => setForm({ ...form, companyId: e.target.value })}
-                    className={issueFor("companyId") ? "border-red-300" : ""}
-                  >
-                    <option value="">Select company…</option>
-                    {companies.map((c) => (
-                      <option key={c.id} value={c.id}>
-                        {c.name} ({c.ref_id})
-                      </option>
-                    ))}
-                  </Select>
+                  <div className="relative mt-1">
+                    <Input
+                      value={companyQuery}
+                      onChange={(e) => {
+                        setCompanyQuery(e.target.value);
+                        setCompanyOpen(true);
+                        // reset selected company if user starts typing over it
+                        setForm((f) => ({ ...f, companyId: "" }));
+                      }}
+                      onFocus={() => setCompanyOpen(true)}
+                      placeholder="Type at least 2 letters…"
+                      className={issueFor("companyId") ? "border-red-300" : ""}
+                    />
+                    {companyOpen && companyMatches.length ? (
+                      <div className="absolute z-20 mt-2 w-full overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg">
+                        {companyMatches.map((c) => (
+                          <button
+                            type="button"
+                            key={c.id}
+                            onClick={() => selectCompany(c)}
+                            className="flex w-full items-center justify-between px-3 py-2 text-left text-sm text-zinc-800 hover:bg-zinc-50"
+                          >
+                            <span>{c.name}</span>
+                            <span className="text-xs text-zinc-500">{c.ref_id}</span>
+                          </button>
+                        ))}
+                      </div>
+                    ) : null}
+                  </div>
                   {issueFor("companyId") ? (
                     <div className="mt-1 text-xs text-red-600">{issueFor("companyId")}</div>
                   ) : null}
@@ -131,16 +181,32 @@ export default function NewJobPage() {
 
                 <div>
                   <Label>Status</Label>
-                  <Select value={form.status} onChange={(e) => setForm({ ...form, status: e.target.value as any })}>
+                  <Select
+                    value={form.status}
+                    onChange={(e) => setForm({ ...form, status: e.target.value as any })}
+                  >
+                    <option value="draft">Draft</option>
                     <option value="open">Open</option>
                     <option value="closed">Closed</option>
-                    <option value="draft">Draft</option>
                   </Select>
                 </div>
 
                 <div>
+                  <Label>Closing Date</Label>
+                  <Input
+                    type="date"
+                    value={form.closingDate}
+                    onChange={(e) => setForm({ ...form, closingDate: e.target.value })}
+                  />
+                </div>
+
+                <div>
                   <Label>Job Ref ID</Label>
-                  <Input value={form.refId} onChange={(e) => setForm({ ...form, refId: e.target.value })} placeholder="Optional" />
+                  <Input
+                    value={form.refId}
+                    onChange={(e) => setForm({ ...form, refId: e.target.value })}
+                    placeholder="Optional"
+                  />
                 </div>
 
                 <div>
@@ -158,26 +224,71 @@ export default function NewJobPage() {
 
                 <div>
                   <Label>Location</Label>
-                  <Input value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="e.g. Malta" />
+                  <Input
+                    value={form.location}
+                    onChange={(e) => setForm({ ...form, location: e.target.value })}
+                    placeholder="e.g. Malta"
+                  />
                 </div>
 
                 <div>
                   <Label>Basis</Label>
-                  <Input value={form.basis} onChange={(e) => setForm({ ...form, basis: e.target.value })} placeholder="e.g. Full-Time" />
+                  <Input
+                    value={form.basis}
+                    onChange={(e) => setForm({ ...form, basis: e.target.value })}
+                    placeholder="e.g. Full-Time"
+                  />
                 </div>
 
                 <div>
                   <Label>Seniority</Label>
-                  <Input value={form.seniority} onChange={(e) => setForm({ ...form, seniority: e.target.value })} placeholder="e.g. Senior" />
+                  <Select
+                    value={form.seniority}
+                    onChange={(e) => setForm({ ...form, seniority: e.target.value as any })}
+                  >
+                    <option value="">Select…</option>
+                    {SENIORITY_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {s}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <MultiSelect
+                    label="Salary Bands"
+                    options={salaryOptions}
+                    value={form.salaryBands}
+                    onChange={(next) => setForm({ ...form, salaryBands: next })}
+                    max={10}
+                    searchable={false}
+                    placeholder="Select salary band(s)…"
+                  />
                 </div>
 
                 <div className="md:col-span-2">
-                  <Label>Description</Label>
-                  <Textarea
+                  <MultiSelect
+                    label="Categories *"
+                    options={categoryOptions}
+                    value={form.categories}
+                    onChange={(next) => setForm({ ...form, categories: next })}
+                    min={1}
+                    max={3}
+                    searchable
+                    placeholder="Select 1–3 categories…"
+                  />
+                  {issueFor("categories") ? (
+                    <div className="mt-1 text-xs text-red-600">{issueFor("categories")}</div>
+                  ) : null}
+                </div>
+
+                <div className="md:col-span-2">
+                  <RichTextEditor
+                    label="Job Description"
                     value={form.description}
-                    onChange={(e) => setForm({ ...form, description: e.target.value })}
-                    rows={8}
-                    placeholder="Job description…"
+                    onChange={(html) => setForm({ ...form, description: html })}
+                    placeholder="Write the job description…"
                   />
                 </div>
               </div>
