@@ -1,67 +1,37 @@
 "use client";
 
-import {
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-  useRef,
-} from "react";
+import { useEffect, useMemo, useState, type ReactNode } from "react";
 import { createPortal } from "react-dom";
 import Link from "next/link";
-import Image from "next/image";
 import { Pencil, Plus, X } from "lucide-react";
-import {
-  Button,
-  Card,
-  Input,
-  Label,
-  PageHeader,
-  Select,
-  Table,
-  Textarea,
-} from "@/components/ui";
+import { Button, Card, Input, Label, PageHeader, Select, Table, Textarea } from "@/components/ui";
 
-type Company = {
-  id: string;
-  ref_id: string;
-  name: string;
-  is_active: boolean;
-  total_jobs: number;
-  has_logo: boolean;
-};
-
-type CompanyDetail = {
+type CompanyRow = {
   id: string;
   ref_id: string;
   name: string;
   description: string | null;
   industry: string | null;
   website: string | null;
-  is_active: boolean;
   total_jobs: number;
-  has_logo: boolean;
-  contact: {
-    first_name: string;
-    last_name: string;
-    email: string;
-    role: string | null;
-    phone: string | null;
-  } | null;
+  // we treat this as derived, even if DB has is_active
+  is_active?: boolean;
 };
 
-type Issue = { path: (string | number)[]; message: string };
+type CompanyDetail = CompanyRow & {
+  contact_first_name: string | null;
+  contact_last_name: string | null;
+  contact_email: string | null;
+  contact_role: string | null;
+  contact_phone: string | null;
+};
 
 function StatusPill({ active }: { active: boolean }) {
+  const style = active
+    ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
+    : "bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200";
   return (
-    <span
-      className={[
-        "inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium",
-        active
-          ? "bg-emerald-50 text-emerald-700 ring-1 ring-emerald-200"
-          : "bg-zinc-100 text-zinc-600 ring-1 ring-zinc-200",
-      ].join(" ")}
-    >
+    <span className={["inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium", style].join(" ")}>
       {active ? "Active" : "Inactive"}
     </span>
   );
@@ -76,7 +46,7 @@ function ModalShell({
   title: string;
   onClose: () => void;
   children: ReactNode;
-  footer: ReactNode;
+  footer?: ReactNode;
 }) {
   return (
     <div className="fixed inset-0 z-50">
@@ -96,9 +66,9 @@ function ModalShell({
 
           <div className="max-h-[75vh] overflow-auto px-5 py-4">{children}</div>
 
-          <div className="border-t border-zinc-200 bg-zinc-50 px-5 py-4">
-            {footer}
-          </div>
+          {footer ? (
+            <div className="border-t border-zinc-200 bg-zinc-50 px-5 py-4">{footer}</div>
+          ) : null}
         </div>
       </div>
     </div>
@@ -108,23 +78,24 @@ function ModalShell({
 export default function CompaniesPage() {
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<"all" | "active" | "inactive">("all");
-  const [companies, setCompanies] = useState<Company[]>([]);
+  const [rows, setRows] = useState<CompanyRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [refreshKey, setRefreshKey] = useState(0);
 
-  // Actions popover (rendered via portal so it's not clipped by Table overflow-hidden)
-  const [menu, setMenu] = useState<null | { id: string; x: number; y: number }>(
-    null
-  );
+  // Actions menu (portal)
+  const [menu, setMenu] = useState<null | { id: string; x: number; y: number }>(null);
 
-  // Edit modal state
-  const [editingId, setEditingId] = useState<string | null>(null);
+  // View modal
+  const [viewId, setViewId] = useState<string | null>(null);
+  const [viewLoading, setViewLoading] = useState(false);
+  const [viewError, setViewError] = useState<string | null>(null);
+  const [viewCompany, setViewCompany] = useState<CompanyDetail | null>(null);
+
+  // Edit modal (existing, but remove Active checkbox)
+  const [editId, setEditId] = useState<string | null>(null);
   const [editLoading, setEditLoading] = useState(false);
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
-  const [editIssues, setEditIssues] = useState<Issue[]>([]);
-  const [editLogoFile, setEditLogoFile] = useState<File | null>(null);
 
   const [form, setForm] = useState({
     refId: "",
@@ -132,17 +103,13 @@ export default function CompaniesPage() {
     description: "",
     industry: "",
     website: "",
-    isActive: true,
-
     contactFirstName: "",
     contactLastName: "",
     contactEmail: "",
     contactRole: "",
     contactPhone: "",
+    logoFile: null as File | null,
   });
-
-  const [existingLogoUrl, setExistingLogoUrl] = useState<string | null>(null);
-  const objectUrlRef = useRef<string | null>(null);
 
   const query = useMemo(() => {
     const p = new URLSearchParams();
@@ -156,9 +123,9 @@ export default function CompaniesPage() {
     setError(null);
     try {
       const res = await fetch(`/api/companies?${query}`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`Failed to load (${res.status})`);
-      const data = await res.json();
-      setCompanies(data.companies ?? []);
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data?.error || `Failed (${res.status})`);
+      setRows(data.companies ?? []);
     } catch (e: any) {
       setError(String(e?.message ?? e));
     } finally {
@@ -169,9 +136,8 @@ export default function CompaniesPage() {
   useEffect(() => {
     void load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [query, refreshKey]);
+  }, [query]);
 
-  // Close actions menu on ESC
   useEffect(() => {
     function onEsc(e: KeyboardEvent) {
       if (e.key === "Escape") setMenu(null);
@@ -180,53 +146,57 @@ export default function CompaniesPage() {
     return () => document.removeEventListener("keydown", onEsc);
   }, []);
 
-  function issueFor(field: string) {
-    const found = editIssues.find((i) => i.path?.[0] === field);
-    return found?.message ?? null;
-  }
-
-  async function openEdit(id: string) {
+  async function openView(id: string) {
     setMenu(null);
-    setEditingId(id);
-    setEditLoading(true);
-    setEditSaving(false);
-    setEditError(null);
-    setEditIssues([]);
-    setEditLogoFile(null);
-    setExistingLogoUrl(null);
-
-    // cleanup any previous preview URL
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
+    setViewId(id);
+    setViewLoading(true);
+    setViewError(null);
+    setViewCompany(null);
 
     try {
       const res = await fetch(`/api/companies/${id}`, { cache: "no-store" });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
-        setEditError(data?.error || `Failed to load (${res.status})`);
+        setViewError(data?.error || `Failed (${res.status})`);
+        return;
+      }
+      setViewCompany(data.company);
+    } catch (e: any) {
+      setViewError(String(e?.message ?? e));
+    } finally {
+      setViewLoading(false);
+    }
+  }
+
+  async function openEdit(id: string) {
+    setMenu(null);
+    setEditId(id);
+    setEditLoading(true);
+    setEditSaving(false);
+    setEditError(null);
+
+    try {
+      const res = await fetch(`/api/companies/${id}`, { cache: "no-store" });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setEditError(data?.error || `Failed (${res.status})`);
         return;
       }
 
       const c: CompanyDetail = data.company;
-
       setForm({
         refId: c.ref_id ?? "",
         name: c.name ?? "",
         description: c.description ?? "",
         industry: c.industry ?? "",
         website: c.website ?? "",
-        isActive: !!c.is_active,
-
-        contactFirstName: c.contact?.first_name ?? "",
-        contactLastName: c.contact?.last_name ?? "",
-        contactEmail: c.contact?.email ?? "",
-        contactRole: c.contact?.role ?? "",
-        contactPhone: c.contact?.phone ?? "",
+        contactFirstName: c.contact_first_name ?? "",
+        contactLastName: c.contact_last_name ?? "",
+        contactEmail: c.contact_email ?? "",
+        contactRole: c.contact_role ?? "",
+        contactPhone: c.contact_phone ?? "",
+        logoFile: null,
       });
-
-      setExistingLogoUrl(c.has_logo ? `/api/companies/${c.id}/logo` : null);
     } catch (e: any) {
       setEditError(String(e?.message ?? e));
     } finally {
@@ -235,11 +205,9 @@ export default function CompaniesPage() {
   }
 
   async function saveEdit() {
-    if (!editingId) return;
-
+    if (!editId) return;
     setEditSaving(true);
     setEditError(null);
-    setEditIssues([]);
 
     try {
       const fd = new FormData();
@@ -248,7 +216,6 @@ export default function CompaniesPage() {
       fd.set("description", form.description);
       fd.set("industry", form.industry);
       fd.set("website", form.website);
-      fd.set("isActive", String(form.isActive));
 
       fd.set("contactFirstName", form.contactFirstName);
       fd.set("contactLastName", form.contactLastName);
@@ -256,27 +223,21 @@ export default function CompaniesPage() {
       fd.set("contactRole", form.contactRole);
       fd.set("contactPhone", form.contactPhone);
 
-      if (editLogoFile) fd.set("logo", editLogoFile);
+      if (form.logoFile) fd.set("logo", form.logoFile);
 
-      const res = await fetch(`/api/companies/${editingId}`, {
+      const res = await fetch(`/api/companies/${editId}`, {
         method: "PATCH",
         body: fd,
       });
 
       const data = await res.json().catch(() => ({}));
-
       if (!res.ok) {
-        if (res.status === 400 && data?.issues) {
-          setEditIssues(data.issues);
-          setEditError("Please correct the highlighted fields.");
-          return;
-        }
         setEditError(data?.error || `Save failed (${res.status})`);
         return;
       }
 
-      setEditingId(null);
-      setRefreshKey((v) => v + 1);
+      setEditId(null);
+      await load();
     } catch (e: any) {
       setEditError(String(e?.message ?? e));
     } finally {
@@ -284,32 +245,13 @@ export default function CompaniesPage() {
     }
   }
 
-  const editLogoPreviewUrl = useMemo(() => {
-    // cleanup previous object url if any
-    if (objectUrlRef.current) {
-      URL.revokeObjectURL(objectUrlRef.current);
-      objectUrlRef.current = null;
-    }
-
-    if (editLogoFile) {
-      const url = URL.createObjectURL(editLogoFile);
-      objectUrlRef.current = url;
-      return url;
-    }
-    return existingLogoUrl;
-  }, [editLogoFile, existingLogoUrl]);
-
-  // Actions menu portal (fixed positioning)
   const menuPortal =
     menu && typeof document !== "undefined"
       ? createPortal(
           <div className="fixed inset-0 z-40" onClick={() => setMenu(null)}>
             <div
-              className="absolute w-40 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
-              style={{
-                top: menu.y + 8,
-                left: Math.max(8, menu.x - 160),
-              }}
+              className="absolute w-44 overflow-hidden rounded-xl border border-zinc-200 bg-white shadow-lg"
+              style={{ top: menu.y + 8, left: Math.max(8, menu.x - 176) }}
               onClick={(e) => e.stopPropagation()}
             >
               <button
@@ -331,7 +273,7 @@ export default function CompaniesPage() {
 
       <PageHeader
         title="Companies"
-        subtitle="Search, filter and manage company profiles."
+        subtitle="Manage Company Profiles"
         right={
           <Link href="/companies/new">
             <Button>
@@ -349,31 +291,24 @@ export default function CompaniesPage() {
                 <Input
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
-                  placeholder="Search by company name or Ref ID"
+                  placeholder="Search companies..."
                 />
               </div>
-              <div>
-                <Select
-                  value={status}
-                  onChange={(e) => setStatus(e.target.value as any)}
-                >
-                  <option value="all">All</option>
-                  <option value="active">Active</option>
-                  <option value="inactive">Inactive</option>
-                </Select>
-              </div>
+
+              <Select value={status} onChange={(e) => setStatus(e.target.value as any)}>
+                <option value="all">All</option>
+                <option value="active">Active</option>
+                <option value="inactive">Inactive</option>
+              </Select>
             </div>
-            <div className="text-xs text-zinc-500">
-              {loading ? "Loading..." : `${companies.length} result(s)`}
-            </div>
+
+            <div className="text-xs text-zinc-500">{loading ? "Loading..." : `${rows.length} result(s)`}</div>
           </div>
         </Card>
 
         <div className="mt-4">
           {error ? (
-            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {error}
-            </div>
+            <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{error}</div>
           ) : null}
 
           <div className="mt-3">
@@ -391,71 +326,57 @@ export default function CompaniesPage() {
                 </tr>
               </thead>
               <tbody>
-                {companies.map((c) => (
-                  <tr key={c.id} className="border-t border-zinc-200">
-                    <td className="px-4 py-3 text-sm text-zinc-700">
-                      {c.ref_id}
-                    </td>
+                {rows.map((c) => {
+                  const active = (c.total_jobs ?? 0) > 0;
+                  return (
+                    <tr key={c.id} className="border-t border-zinc-200">
+                      <td className="px-4 py-3 text-sm text-zinc-700">{c.ref_id}</td>
+                      <td className="px-4 py-3">
+                        <img
+                          src={`/api/companies/${c.id}/logo`}
+                          alt=""
+                          className="h-8 w-8 rounded-md border border-zinc-200 object-cover"
+                          onError={(e) => ((e.currentTarget.style.display = "none"))}
+                        />
+                      </td>
+                      <td className="px-4 py-3 text-sm font-medium text-zinc-900">
+                        <button type="button" className="hover:underline" onClick={() => openView(c.id)}>
+                          {c.name}
+                        </button>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-zinc-700">
+                        <Link
+                          href={`/jobs?companyId=${c.id}&status=open`}
+                          className="hover:underline"
+                          title="View open jobs"
+                        >
+                          {c.total_jobs ?? 0}
+                        </Link>
+                      </td>
+                      <td className="px-4 py-3">
+                        <StatusPill active={active} />
+                      </td>
+                      <td className="px-4 py-3 text-right">
+                        <button
+                          className="rounded-lg px-2 py-1 text-lg leading-none text-zinc-700 hover:bg-zinc-100"
+                          aria-label="Row actions"
+                          title="Actions"
+                          onClick={(e) => {
+                            const rect = (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
+                            setMenu((prev) => (prev?.id === c.id ? null : { id: c.id, x: rect.right, y: rect.bottom }));
+                          }}
+                        >
+                          ⋯
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
 
-                    <td className="px-4 py-3">
-                      <div className="relative h-8 w-8 overflow-hidden rounded-md border border-zinc-200 bg-white">
-                        {c.has_logo ? (
-                          <Image
-                            src={`/api/companies/${c.id}/logo`}
-                            alt={`${c.name} logo`}
-                            fill
-                            className="object-contain p-0.5"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] text-zinc-400">
-                            —
-                          </div>
-                        )}
-                      </div>
-                    </td>
-
-                    <td className="px-4 py-3 text-sm font-medium text-zinc-900">
-                      {c.name}
-                    </td>
-
-                    <td className="px-4 py-3 text-sm text-zinc-700">
-                      {c.total_jobs}
-                    </td>
-
-                    <td className="px-4 py-3">
-                      <StatusPill active={c.is_active} />
-                    </td>
-
-                    <td className="px-4 py-3 text-right">
-                      {/* 3 dots button (always visible) */}
-                      <button
-                        className="rounded-lg px-2 py-1 text-lg leading-none text-zinc-700 hover:bg-zinc-100"
-                        aria-label="Row actions"
-                        title="Actions"
-                        onClick={(e) => {
-                          const rect =
-                            (e.currentTarget as HTMLButtonElement).getBoundingClientRect();
-                          setMenu((prev) =>
-                            prev?.id === c.id
-                              ? null
-                              : { id: c.id, x: rect.right, y: rect.bottom }
-                          );
-                        }}
-                      >
-                        ⋯
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-
-                {companies.length === 0 && !loading ? (
+                {rows.length === 0 && !loading ? (
                   <tr>
-                    <td
-                      colSpan={6}
-                      className="px-4 py-10 text-center text-sm text-zinc-500"
-                    >
-                      No companies found. Click{" "}
-                      <span className="font-medium">New Company</span> to add one.
+                    <td colSpan={6} className="px-4 py-10 text-center text-sm text-zinc-500">
+                      No companies found.
                     </td>
                   </tr>
                 ) : null}
@@ -465,244 +386,191 @@ export default function CompaniesPage() {
         </div>
       </div>
 
+      {/* VIEW MODAL */}
+      {viewId ? (
+        <ModalShell title="Company Details" onClose={() => setViewId(null)}>
+          {viewError ? (
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{viewError}</div>
+          ) : null}
+
+          {viewLoading ? (
+            <div className="py-10 text-center text-sm text-zinc-600">Loading...</div>
+          ) : viewCompany ? (
+            <div className="space-y-4">
+              <div className="rounded-xl border border-zinc-200 p-4">
+                <div className="flex items-start gap-3">
+                  <img
+                    src={`/api/companies/${viewCompany.id}/logo`}
+                    alt=""
+                    className="h-[70px] w-[70px] rounded-xl border border-zinc-200 object-cover"
+                    onError={(e) => ((e.currentTarget.style.display = "none"))}
+                  />
+                  <div>
+                    <div className="text-sm font-semibold text-zinc-900">{viewCompany.name}</div>
+                    <div className="mt-1 text-xs text-zinc-600">
+                      Ref: {viewCompany.ref_id} • Status: {(viewCompany.total_jobs ?? 0) > 0 ? "Active" : "Inactive"} • Open jobs:{" "}
+                      {viewCompany.total_jobs ?? 0}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <Label>Industry</Label>
+                    <div className="mt-1 text-sm text-zinc-800">{viewCompany.industry || "—"}</div>
+                  </div>
+                  <div>
+                    <Label>Website</Label>
+                    <div className="mt-1 text-sm text-zinc-800">{viewCompany.website || "—"}</div>
+                  </div>
+                </div>
+
+                <div className="mt-4">
+                  <Label>Description</Label>
+                  <div className="mt-1 whitespace-pre-wrap text-sm text-zinc-800">
+                    {viewCompany.description || "—"}
+                  </div>
+                </div>
+              </div>
+
+              <div className="rounded-xl border border-zinc-200 p-4">
+                <div className="text-sm font-semibold text-zinc-900">Primary Contact</div>
+                <div className="mt-3 grid grid-cols-1 gap-4 md:grid-cols-2">
+                  <div>
+                    <Label>First Name</Label>
+                    <div className="mt-1 text-sm text-zinc-800">{viewCompany.contact_first_name || "—"}</div>
+                  </div>
+                  <div>
+                    <Label>Last Name</Label>
+                    <div className="mt-1 text-sm text-zinc-800">{viewCompany.contact_last_name || "—"}</div>
+                  </div>
+                  <div>
+                    <Label>Email</Label>
+                    <div className="mt-1 text-sm text-zinc-800">{viewCompany.contact_email || "—"}</div>
+                  </div>
+                  <div>
+                    <Label>Role</Label>
+                    <div className="mt-1 text-sm text-zinc-800">{viewCompany.contact_role || "—"}</div>
+                  </div>
+                  <div>
+                    <Label>Phone</Label>
+                    <div className="mt-1 text-sm text-zinc-800">{viewCompany.contact_phone || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+        </ModalShell>
+      ) : null}
+
       {/* EDIT MODAL */}
-      {editingId ? (
+      {editId ? (
         <ModalShell
           title="Edit Company"
-          onClose={() => setEditingId(null)}
+          onClose={() => setEditId(null)}
           footer={
             <div className="flex items-center justify-end gap-2">
-              <Button
-                variant="secondary"
-                type="button"
-                onClick={() => setEditingId(null)}
-                disabled={editSaving}
-              >
+              <Button variant="secondary" type="button" onClick={() => setEditId(null)} disabled={editSaving}>
                 Cancel
               </Button>
-              <Button
-                type="button"
-                onClick={saveEdit}
-                disabled={editSaving || editLoading}
-              >
+              <Button type="button" onClick={saveEdit} disabled={editSaving || editLoading}>
                 {editSaving ? "Saving..." : "Save"}
               </Button>
             </div>
           }
         >
           {editError ? (
-            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">
-              {editError}
-            </div>
+            <div className="mb-4 rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700">{editError}</div>
           ) : null}
 
           {editLoading ? (
-            <div className="py-10 text-center text-sm text-zinc-600">
-              Loading...
-            </div>
+            <div className="py-10 text-center text-sm text-zinc-600">Loading...</div>
           ) : (
             <div className="space-y-4">
-              <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                <div className="text-sm font-semibold text-zinc-900">
-                  Company Details
-                </div>
+              <div className="rounded-xl border border-zinc-200 p-4">
+                <div className="text-sm font-semibold text-zinc-900">Company</div>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <Label>Ref ID *</Label>
-                    <Input
-                      value={form.refId}
-                      onChange={(e) =>
-                        setForm({ ...form, refId: e.target.value })
-                      }
-                      className={issueFor("refId") ? "border-red-300" : ""}
-                    />
-                    {issueFor("refId") ? (
-                      <div className="mt-1 text-xs text-red-600">
-                        {issueFor("refId")}
-                      </div>
-                    ) : null}
+                    <Label>Ref ID</Label>
+                    <Input value={form.refId} onChange={(e) => setForm({ ...form, refId: e.target.value })} />
                   </div>
-
                   <div>
-                    <Label>Company Name *</Label>
-                    <Input
-                      value={form.name}
-                      onChange={(e) => setForm({ ...form, name: e.target.value })}
-                      className={issueFor("name") ? "border-red-300" : ""}
-                    />
-                    {issueFor("name") ? (
-                      <div className="mt-1 text-xs text-red-600">
-                        {issueFor("name")}
-                      </div>
-                    ) : null}
+                    <Label>Company Name</Label>
+                    <Input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} />
                   </div>
-
                   <div className="md:col-span-2">
-                    <Label>Company Description</Label>
-                    <Textarea
-                      value={form.description}
-                      onChange={(e) =>
-                        setForm({ ...form, description: e.target.value })
-                      }
-                      rows={4}
-                      placeholder="Short company description…"
-                    />
+                    <Label>Description</Label>
+                    <Textarea value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} rows={4} />
                   </div>
-
                   <div>
                     <Label>Industry</Label>
-                    <Input
-                      value={form.industry}
-                      onChange={(e) =>
-                        setForm({ ...form, industry: e.target.value })
-                      }
-                    />
+                    <Input value={form.industry} onChange={(e) => setForm({ ...form, industry: e.target.value })} />
                   </div>
-
                   <div>
                     <Label>Website</Label>
-                    <Input
-                      value={form.website}
-                      onChange={(e) =>
-                        setForm({ ...form, website: e.target.value })
-                      }
-                    />
+                    <Input value={form.website} onChange={(e) => setForm({ ...form, website: e.target.value })} />
                   </div>
 
                   <div className="md:col-span-2">
                     <Label>Mini Logo (70x70px)</Label>
-                    <div className="mt-2 flex items-center gap-4">
-                      <div className="relative h-[70px] w-[70px] overflow-hidden rounded-lg border border-zinc-200 bg-white">
-                        {editLogoPreviewUrl ? (
-                          // eslint-disable-next-line @next/next/no-img-element
-                          <img
-                            src={editLogoPreviewUrl}
-                            alt="Logo preview"
-                            className="h-full w-full object-contain p-1"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-xs text-zinc-400">
-                            No logo
-                          </div>
-                        )}
-                      </div>
-
-                      <div className="flex-1">
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={(e) =>
-                            setEditLogoFile(e.target.files?.[0] ?? null)
-                          }
-                          className="block w-full text-sm text-zinc-700 file:mr-4 file:rounded-lg file:border file:border-zinc-300 file:bg-white file:px-4 file:py-2 file:text-sm file:font-medium file:text-zinc-900 hover:file:bg-zinc-50"
-                        />
-                        <div className="mt-1 text-xs text-zinc-500">
-                          Uploading a file will replace the current logo.
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="flex items-center gap-2 text-sm">
-                      <input
-                        type="checkbox"
-                        checked={form.isActive}
-                        onChange={(e) =>
-                          setForm({ ...form, isActive: e.target.checked })
-                        }
-                        className="h-4 w-4 rounded border-zinc-300"
+                    <div className="mt-2 flex items-center gap-3">
+                      <img
+                        src={`/api/companies/${editId}/logo`}
+                        alt=""
+                        className="h-[70px] w-[70px] rounded-xl border border-zinc-200 object-cover"
+                        onError={(e) => ((e.currentTarget.style.display = "none"))}
                       />
-                      <span className="text-zinc-700">Active</span>
-                    </label>
+                      <input
+                        type="file"
+                        accept="image/*"
+                        onChange={(e) => setForm({ ...form, logoFile: e.target.files?.[0] ?? null })}
+                      />
+                    </div>
+                    <div className="mt-1 text-xs text-zinc-500">
+                      Active/Inactive is now derived from Open Jobs count (no checkbox).
+                    </div>
                   </div>
                 </div>
               </div>
 
-              <div className="rounded-xl border border-zinc-200 bg-white p-4">
-                <div className="text-sm font-semibold text-zinc-900">
-                  Primary Contact
-                </div>
+              <div className="rounded-xl border border-zinc-200 p-4">
+                <div className="text-sm font-semibold text-zinc-900">Primary Contact</div>
 
                 <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
                   <div>
-                    <Label>First Name *</Label>
+                    <Label>First Name</Label>
                     <Input
                       value={form.contactFirstName}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          contactFirstName: e.target.value,
-                        })
-                      }
-                      className={
-                        issueFor("contactFirstName") ? "border-red-300" : ""
-                      }
+                      onChange={(e) => setForm({ ...form, contactFirstName: e.target.value })}
                     />
-                    {issueFor("contactFirstName") ? (
-                      <div className="mt-1 text-xs text-red-600">
-                        {issueFor("contactFirstName")}
-                      </div>
-                    ) : null}
                   </div>
-
                   <div>
-                    <Label>Last Name *</Label>
+                    <Label>Last Name</Label>
                     <Input
                       value={form.contactLastName}
-                      onChange={(e) =>
-                        setForm({
-                          ...form,
-                          contactLastName: e.target.value,
-                        })
-                      }
-                      className={
-                        issueFor("contactLastName") ? "border-red-300" : ""
-                      }
+                      onChange={(e) => setForm({ ...form, contactLastName: e.target.value })}
                     />
-                    {issueFor("contactLastName") ? (
-                      <div className="mt-1 text-xs text-red-600">
-                        {issueFor("contactLastName")}
-                      </div>
-                    ) : null}
                   </div>
-
                   <div>
-                    <Label>Email Address *</Label>
+                    <Label>Email</Label>
                     <Input
                       value={form.contactEmail}
-                      onChange={(e) =>
-                        setForm({ ...form, contactEmail: e.target.value })
-                      }
-                      className={
-                        issueFor("contactEmail") ? "border-red-300" : ""
-                      }
+                      onChange={(e) => setForm({ ...form, contactEmail: e.target.value })}
                     />
-                    {issueFor("contactEmail") ? (
-                      <div className="mt-1 text-xs text-red-600">
-                        {issueFor("contactEmail")}
-                      </div>
-                    ) : null}
                   </div>
-
                   <div>
                     <Label>Role</Label>
                     <Input
                       value={form.contactRole}
-                      onChange={(e) =>
-                        setForm({ ...form, contactRole: e.target.value })
-                      }
+                      onChange={(e) => setForm({ ...form, contactRole: e.target.value })}
                     />
                   </div>
-
-                  <div className="md:col-span-2">
+                  <div>
                     <Label>Contact Number</Label>
                     <Input
                       value={form.contactPhone}
-                      onChange={(e) =>
-                        setForm({ ...form, contactPhone: e.target.value })
-                      }
+                      onChange={(e) => setForm({ ...form, contactPhone: e.target.value })}
                     />
                   </div>
                 </div>
